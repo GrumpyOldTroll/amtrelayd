@@ -1,0 +1,7 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+bindir=@bindir@
+
+Name: amtrelayd
+Description: Daemon for running an AMT relay (RFC 7450)
+Version: @VERSION@

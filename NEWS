@@ -1,0 +1,8 @@
+amtrelayd 2
+========
+Split the relay out from prior home. Lost history, sorry.
+Re-do the build system based on libabc template.
+
+amtrelay 1
+========
+Initial release was https://github.com/GrumpyOldTroll/amt.
