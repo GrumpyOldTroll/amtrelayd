@@ -65,7 +65,6 @@ my_CFLAGS="\
 -Wnested-externs \
 -Wpointer-arith \
 -Wshadow \
--Wsign-compare \
 -Wtype-limits \
 "
 AC_SUBST([my_CFLAGS])
