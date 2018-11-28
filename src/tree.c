@@ -465,6 +465,8 @@ gw_delete(gw_t* gw)
     /* Canncel the idle timer for this gw */
     evtimer_del(gw->idle_timer);
 
+    sg->sg_instance->relay_gwcount--;
+
     relay_gw_free(gw);
 }
 
@@ -589,6 +591,8 @@ gw_add(sgnode* sg, prefix_t* pfx)
             exit(1);
         }
     }
+
+    gw->gw_sg->sg_instance->relay_gwcount++;
 
     return gw;
 }

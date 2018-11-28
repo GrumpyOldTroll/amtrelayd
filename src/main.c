@@ -35,7 +35,8 @@ static const char __attribute__((unused)) id[] =
 
 #include <arpa/inet.h>
 #include <assert.h>
-#include <event.h>
+#include <event2/event.h>
+#include <event2/http.h>
 #include <fcntl.h>
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -119,10 +120,6 @@ relay_instance_free(relay_instance* instance)
     if (instance->relay_anycast_ev) {
         event_free(instance->relay_anycast_ev);
         instance->relay_anycast_ev = NULL;
-    }
-    if (instance->relay_url_ev) {
-        event_free(instance->relay_url_ev);
-        instance->relay_url_ev = NULL;
     }
     if (instance->relay_pkt_timer) {
         event_free(instance->relay_pkt_timer);
@@ -433,92 +430,28 @@ relay_socket_shared_init(int family,
 void
 relay_url_init(relay_instance* instance)
 {
-    int rc, salen, sock;
-    // int val, len;
-    struct sockaddr_in sin;
-    struct sockaddr_in6 sin6;
-    struct sockaddr* sa = NULL;
-    char str[MAX_ADDR_STRLEN];
-    void* addrp = 0;
-    int family = instance->relay_af;
-    uint16_t port = instance->relay_url_port;
-
     if (instance->relay_url_port == 0) {
         fprintf(stderr, "Not starting RelayUrl socket for stats (RelayUrlPort=0)\n");
         return;
     }
 
-    switch (instance->relay_af) {
-        case AF_INET:
-            salen = sizeof(sin);
-            sa = (struct sockaddr*)&sin;
-            bzero(sa, salen);
-            sin.sin_family = instance->relay_af;
-            sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            sin.sin_port = htons(instance->relay_url_port);
-            addrp = &sin.sin_addr;
-            break;
-
-        case AF_INET6:
-            salen = sizeof(sin6);
-            sa = (struct sockaddr*)&sin6;
-            bzero(sa, salen);
-            sin6.sin6_addr = in6addr_loopback;
-            sin6.sin6_family = instance->relay_af;
-            sin6.sin6_port = htons(instance->relay_url_port);
-            addrp = &sin6.sin6_addr;
-            break;
-
-        default:
-            salen = 0;
-            assert(instance->relay_af == AF_INET ||
-                   instance->relay_af == AF_INET6);
+    /* Create a new evhttp object to handle requests. */
+    struct evhttp *http = evhttp_new(instance->event_base);
+    if (!http) {
+      fprintf(stderr, "couldn't create evhttp. Exiting.\n");
+      return;
     }
 
-    // val = TRUE;
-    // len = sizeof(val);
-    sock = socket(instance->relay_af, SOCK_STREAM, IPPROTO_TCP);
-    if (sock < 0) {
-        fprintf(stderr, "error creating URL socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
-                strerror(errno));
+    evhttp_set_cb(http, "/show-stats", relay_show_stats_cb, instance);
+    evhttp_set_cb(http, "/show-memory", relay_show_memory_cb, instance);
+    evhttp_set_cb(http, "/show-streams", relay_show_streams_cb, instance);
+
+    /* Now we tell the evhttp what port to listen on */
+    struct evhttp_bound_socket *handle = evhttp_bind_socket_with_handle(http, "localhost", instance->relay_url_port);
+    if (!handle) {
+        fprintf(stderr, "couldn't bind to port %d. Exiting.\n", (int)instance->relay_url_port);
         exit(1);
     }
-
-    rc = bind(sock, sa, salen);
-    if (rc < 0) {
-        fprintf(stderr, "error binding url socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
-                strerror(errno));
-        exit(1);
-    }
-
-    rc = fcntl(sock, F_SETFL, O_NONBLOCK);
-    if (rc < 0) {
-        fprintf(stderr, "error O_NONBLOCK on url socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
-                strerror(errno));
-        exit(1);
-    }
-
-    rc = listen(sock, 5);
-    if (rc < 0) {
-        fprintf(stderr, "error url listen on socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
-                strerror(errno));
-        exit(1);
-    }
-
-    instance->relay_url_ev = event_new(instance->event_base, sock,
-            EV_READ | EV_PERSIST, relay_accept_url, (void*)instance);
-    rc = event_add(instance->relay_url_ev, NULL);
-    if (rc < 0) {
-        fprintf(stderr, "error url event_add on socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
-                strerror(errno));
-        exit(1);
-    }
-    instance->relay_url_sock = sock;
 }
 
 static void

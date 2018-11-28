@@ -95,7 +95,6 @@ extern void bufferevent_setwatermark(struct bufferevent*,
 
 static mem_handle mem_packet_handle = NULL;
 static mem_handle mem_rif_handle = NULL;
-static mem_handle mem_url_handle = NULL;
 
 static recv_if*
 relay_rif_get(relay_instance* instance)
@@ -153,28 +152,6 @@ relay_pkt_free(packet* pkt)
     }
 
     mem_type_free(mem_packet_handle, pkt);
-}
-
-static url_request*
-relay_url_get(relay_instance* instance)
-{
-    url_request* url;
-
-    if (!mem_url_handle) {
-        mem_url_handle = mem_type_init(sizeof(url_request), "URL Request");
-    }
-    url = (url_request*)mem_type_alloc(mem_url_handle);
-    url->url_instance = instance;
-
-    return url;
-}
-
-void
-relay_url_free(url_request* url)
-{
-    if (url) {
-        mem_type_free(mem_url_handle, url);
-    }
 }
 
 /*
@@ -1667,15 +1644,7 @@ relay_instance_read(int fd, short flags, void* uap)
     } while (len > 0);
 }
 
-void
-relay_close_url(url_request* url)
-{
-    bufferevent_free(url->url_bufev);
-    close(url->url_sock);
-    relay_url_free(url);
-}
-
-void
+static void
 relay_show_stats(relay_instance* instance, struct evbuffer* buf)
 {
     evbuffer_add_printf(buf, "Address Family not supported: %u\n",
@@ -1696,6 +1665,17 @@ relay_show_stats(relay_instance* instance, struct evbuffer* buf)
           instance->stats.membership_query_unexpected);
     evbuffer_add_printf(buf, "Relay didn't expect Advertisement: %u\n",
           instance->stats.relay_advertisement_unexpected);
+}
+
+void
+relay_show_stats_cb(struct evhttp_request *req, void *arg)
+{
+    relay_instance* instance = arg;
+	struct evbuffer *evb = evbuffer_new();
+    relay_show_stats(instance, evb);
+	evhttp_send_reply(req, 200, "OK", evb);
+
+    evbuffer_free(evb);
 }
 
 static void
@@ -1722,202 +1702,25 @@ relay_show_memory(relay_instance* instance, struct evbuffer* buf)
 }
 
 void
-readcb(struct bufferevent* bev, void* uap)
+relay_show_memory_cb(struct evhttp_request *req, void *arg)
 {
-    url_request* url;
-    relay_instance* instance;
+    relay_instance* instance = arg;
+	struct evbuffer *evb = evbuffer_new();
+    relay_show_memory(instance, evb);
+	evhttp_send_reply(req, 200, "OK", evb);
 
-    url = (url_request*)uap;
-    instance = url->url_instance;
-
-    if (evbuffer_find(EVBUFFER_INPUT(bev), (u_char*)"\r\n\r\n", 4) !=
-          NULL) {
-        char* str;
-        struct evbuffer *hdrbuf, *databuf = NULL;
-
-        str = evbuffer_readline(EVBUFFER_INPUT(bev));
-        if (str) {
-            char* cmd;
-
-            cmd = strtok(str, " \t");
-            if (strncasecmp(cmd, "GET", 3) == 0) {
-                cmd = strtok(NULL, "- \t");
-                if (strncasecmp(cmd, "/show", 5) == 0) {
-                    cmd = strtok(NULL, "- \t");
-                    if (strncasecmp(cmd, "stats", 5) == 0) {
-                        databuf = evbuffer_new();
-                        relay_show_stats(instance, databuf);
-                    } else if (strncasecmp(cmd, "memory", 6) == 0) {
-                        databuf = evbuffer_new();
-                        relay_show_memory(instance, databuf);
-                    } else if (strncasecmp(cmd, "streams", 5) == 0) {
-                        databuf = evbuffer_new();
-                        relay_show_streams(instance, databuf);
-                    } else {
-                        /*
-                         * return file not found
-                         */
-                        bufferevent_disable(bev, EV_READ);
-                        relay_close_url(url);
-                        return;
-                    }
-#ifdef notyet
-                } else if (strncasecmp(cmd, "/clear", 6) == 0) {
-#endif /* notyet */
-                } else {
-                    /*
-                     * return file not found
-                     */
-                    bufferevent_disable(bev, EV_READ);
-                    relay_close_url(url);
-                    return;
-                }
-            } else {
-                /*
-                 * return operation not supported
-                 */
-                bufferevent_disable(bev, EV_READ);
-                relay_close_url(url);
-                return;
-            }
-        }
-        bufferevent_disable(bev, EV_READ);
-        hdrbuf = evbuffer_new();
-
-        evbuffer_add_printf(hdrbuf, "HTTP/1.1 200 OK\n");
-        evbuffer_add_printf(hdrbuf, "Server: amtrelayd\n");
-        if (databuf) {
-            int len;
-
-            len = EVBUFFER_LENGTH(databuf);
-            if (len) {
-                evbuffer_add_printf(hdrbuf, "Content-Length: %d\n", len);
-            }
-        }
-        evbuffer_add_printf(hdrbuf, "Connection: close\n");
-        evbuffer_add_printf(hdrbuf, "Content-Type: text/x-yaml\n");
-        evbuffer_add_printf(hdrbuf, "\n");
-        bufferevent_write_buffer(bev, hdrbuf);
-        evbuffer_free(hdrbuf);
-
-        if (databuf) {
-            bufferevent_write_buffer(bev, databuf);
-            evbuffer_free(databuf);
-        }
-    }
+    evbuffer_free(evb);
 }
 
 void
-writecb(struct bufferevent* bev, void* uap)
+relay_show_streams_cb(struct evhttp_request *req, void *arg)
 {
-    url_request* url;
+    relay_instance* instance = arg;
+	struct evbuffer *evb = evbuffer_new();
+    relay_show_streams(instance, evb);
+	evhttp_send_reply(req, 200, "OK", evb);
 
-    url = (url_request*)uap;
-
-    if (EVBUFFER_LENGTH(bev->output) == 0) {
-        relay_close_url(url);
-    }
-}
-
-void
-errorcb(struct bufferevent* bev, short what, void* uap)
-{
-    (void)bev;
-    (void)what;
-    url_request* url;
-
-    url = (url_request*)uap;
-
-    relay_close_url(url);
-}
-
-void
-relay_accept_url(int fd, short flags, void* uap)
-{
-    (void)flags;
-    int newfd;
-    socklen_t salen;
-    char str[MAX_ADDR_STRLEN];
-    const char* strp;
-    url_request* url;
-    relay_instance* instance;
-    struct sockaddr_in sin;
-    struct sockaddr_in6 sin6;
-    struct sockaddr* sa = NULL;
-
-    instance = (relay_instance*)uap;
-
-    switch (instance->relay_af) {
-        case AF_INET:
-            sa = (struct sockaddr*)&sin;
-            break;
-
-        case AF_INET6:
-            sa = (struct sockaddr*)&sin6;
-            break;
-
-        default:
-            assert(instance->relay_af == AF_INET ||
-                   instance->relay_af == AF_INET6);
-    }
-
-    newfd = accept(fd, sa, &salen);
-    if (newfd < 0) {
-        switch (errno) {
-            case EWOULDBLOCK:
-            case ECONNABORTED:
-            case EINTR:
-                if (relay_debug(instance)) {
-                    fprintf(stderr, "error accepting URL connection: %s\n",
-                          strerror(errno));
-                }
-                return;
-
-            default:
-                fprintf(stderr, "error accepting URL connection: %s\n",
-                      strerror(errno));
-                return;
-        }
-    }
-
-    switch (instance->relay_af) {
-        case AF_INET:
-            strp = inet_ntop(
-                  instance->relay_af, &sin.sin_addr, str, sizeof(str));
-            break;
-
-        case AF_INET6:
-            strp = inet_ntop(
-                  instance->relay_af, &sin6.sin6_addr, str, sizeof(str));
-            break;
-
-        default:
-            strp = NULL;
-            assert(instance->relay_af == AF_INET ||
-                   instance->relay_af == AF_INET6);
-    }
-
-    if (relay_debug(instance)) {
-        if (strp) {
-            fprintf(stderr, "URL connection from %s\n", strp);
-        } else {
-            fprintf(stderr, "URL connection with error: %s\n",
-                  strerror(errno));
-        }
-    }
-
-    url = relay_url_get(instance);
-    url->url_sock = newfd;
-    url->url_instance = instance;
-    url->url_bufev = bufferevent_new(newfd, readcb, writecb, errorcb, url);
-
-    if (url->url_bufev == NULL) {
-        fprintf(
-              stderr, "error url buffer event new: %s\n", strerror(errno));
-        exit(1);
-    }
-
-    bufferevent_setwatermark(url->url_bufev, EV_READ, (size_t)0, (size_t)0);
+    evbuffer_free(evb);
 }
 
 /*

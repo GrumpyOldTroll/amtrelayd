@@ -40,6 +40,8 @@
 #include <stdint.h>
 #include <sys/queue.h>
 #include <event.h>
+#include <event2/event.h>
+#include <event2/http.h>
 #include "amt.h"
 #include "prefix.h"
 #include "utils.h"
@@ -122,8 +124,6 @@ typedef struct _relay_instance
     struct packets pkt_head[NUM_QUEUES]; /* priority queued packets */
     struct event *relay_pkt_timer;        /* pointer to timer handle */
     relay_stats stats;                   /* statistics */
-    int relay_url_sock;                  /* socket for URL requests */
-    struct event *relay_url_ev;           /* libevent handle */
     u_int16_t relay_url_port; /* port to listen for URL requests */
     char passphrase[NAMELEN]; /* local secret for HMAC-MD5 */
     u_int8_t packet_buffer[BUFFER_SIZE]; /* transmit/recv buffer */
@@ -149,6 +149,7 @@ typedef struct _relay_instance
 
     unsigned int relay_grcount;
     unsigned int relay_sgcount;          /* includes ASM gorups */
+    unsigned int relay_gwcount;
     char cap_iface_name[16]; // IFNAMSIZ might be better here.
     struct sockaddr_storage tunnel_addr; /* IP address used as the source addr for membership queries */
     struct sockaddr_storage listen_addr; /* IP address to listen for packets from gateways */
@@ -310,13 +311,6 @@ typedef struct _packet
     uint8_t pkt_space[];
 } packet;
 
-typedef struct _url_request
-{
-    relay_instance* url_instance;  /* instance */
-    int url_sock;                  /* socket */
-    struct bufferevent* url_bufev; /* event to read in stream */
-} url_request;
-
 TAILQ_HEAD(source_list, _mcast_source);
 
 typedef struct _mcast_source
@@ -338,8 +332,10 @@ typedef struct _group_record
     u_int32_t nsrcs;
 } group_record_t;
 
+void relay_show_stats_cb(struct evhttp_request *req, void *arg);
+void relay_show_memory_cb(struct evhttp_request *req, void *arg);
+void relay_show_streams_cb(struct evhttp_request *req, void *arg);
 void relay_instance_read(int, short, void*);
-void relay_accept_url(int, short, void*);
 void relay_sg_except_read(int, short, void*);
 int relay_socket_shared_init(int family, struct sockaddr*, int debug);
 void relay_rif_free(recv_if*);
