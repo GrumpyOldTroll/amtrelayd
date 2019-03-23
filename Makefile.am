@@ -57,7 +57,8 @@ src_amtrelayd_SOURCES = \
 	src/tree.h \
 	src/utils.h
 src_amtrelayd_LDADD = \
-	-levent
+	-levent \
+	-ldns_sd
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = src/amtrelayd.pc

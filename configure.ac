@@ -57,6 +57,14 @@ AC_CHECK_LIB([event],[event_base_new],
 	[AC_DEFINE([HAVE_EVENT_LIB], [1], [Define to 1 if you have libevent])],
 	[AC_MSG_ERROR([could not invoke event_base_new with -levent, you need to install libevent-dev or build from https://github.com/libevent/libevent.git and set C_INCLUDE_PATH and LIBRARY_PATH])])
 
+AC_CHECK_HEADER([dns_sd.h],
+     [AC_DEFINE([HAVE_DNSSD_H], [1], [Define to 1 if you have <dns_sd.h>.])],
+     [AC_MSG_ERROR([could not include <dns_sd.h>. You need to install mdnsd or build from https://github.com/IETF-Hackathon/mDNSResponder.git (mDNSPosix) and set C_INCLUDE_PATH and LIBRARY_PATH])])
+
+AC_CHECK_LIB([dns_sd],[DNSServiceRegister],
+	[AC_DEFINE([HAVE_DNSSD_LIB], [1], [Define to 1 if you have libdns_sd])],
+	[AC_MSG_ERROR([could not load libdns_sd.so. You need to install mdnsd or build from https://github.com/IETF-Hackathon/mDNSResponder.git (mDNSPosix) and set C_INCLUDE_PATH and LIBRARY_PATH])])
+
 my_CFLAGS="\
 -Werror \
 -Wall \

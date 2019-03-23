@@ -12,3 +12,5 @@ Makefile.in
 /stamp-h1
 .*.sw?
 *~
+/src/amtrelayd
+/src/amtrelayd.pc

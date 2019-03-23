@@ -147,6 +147,8 @@ typedef struct _relay_instance
     struct event *relay_raw_receive_ev;    /* libevent handle */
     int relay_joining_socket;  /* an ip socket that can do joins when raw */
 
+    struct event *dns_sk_ev;
+
     unsigned int relay_grcount;
     unsigned int relay_sgcount;          /* includes ASM gorups */
     char cap_iface_name[16]; // IFNAMSIZ might be better here.

@@ -2,6 +2,7 @@
  * COPYRIGHT AND LICENSE
  *
  * Copyright (c) 2004-2005, Juniper Networks, Inc.
+ * Copyright (c) 2016-2019, Akamai Technologies, Inc., Jake Holland
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,6 +55,7 @@ static const char __attribute__((unused)) id[] =
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <dns_sd.h>
 
 #include "amt.h"
 #include "memory.h"
@@ -293,6 +295,60 @@ relay_event_init(relay_instance* instance)
     instance->event_base = event_base_new();
     if (instance->event_base == NULL) {
         fprintf(stderr, "event_base_new failed\n");
+        exit(1);
+    }
+}
+
+static void
+dns_sd_recv(int fd, short flags, void* uap)
+{
+    (void)fd;
+    (void)flags;
+    DNSServiceRef *sdRef = (DNSServiceRef*)uap;
+    DNSServiceProcessResult(*sdRef);
+}
+
+static void dns_service_register_cb(DNSServiceRef sdRef,
+        DNSServiceFlags flags,
+        DNSServiceErrorType errorCode,
+        const char* name,
+        const char* regtype,
+        const char* domain,
+        void* context)
+{
+    relay_instance* instance = (relay_instance*)context;
+    (void)instance;
+    if (relay_debug(instance)) {
+        fprintf(stderr,
+            "service register cb: flags=0x%x, err=%d, name=%s, reg=%s, dom=%s",
+            flags, errorCode, name, regtype, domain);
+    }
+}
+
+static void
+relay_dns_sd_init(relay_instance* instance, DNSServiceRef *sdRef)
+{
+    DNSServiceFlags dnsSDFlags = 0;
+    uint32_t dnsInterfaceIdx = 0;  // 0 = default
+    const char* dnsName = NULL;  // service name, null=default
+    const char* dnsDomain = NULL;  // search domain, null=default
+    const char* dnsHost = NULL;
+    uint16_t amtPort = ntohs(instance->amt_port);
+    uint16_t dnsTxtLen = 0;
+    void* dnsTxt = NULL;
+    void* dnsRegisterContext = instance;
+    DNSServiceErrorType dnsErr;
+    dnsErr = DNSServiceRegister(sdRef, dnsSDFlags, dnsInterfaceIdx,
+            dnsName, "_amt._udp", dnsDomain, dnsHost, amtPort,
+            dnsTxtLen, dnsTxt, &dns_service_register_cb, dnsRegisterContext);
+    if (dnsErr != kDNSServiceErr_NoError) {
+        fprintf(stderr, "DNSServiceRegister failed: %d\n", dnsErr);
+        exit(1);
+    }
+    instance->dns_sk_ev = event_new(instance->event_base,
+            DNSServiceRefSockFD(*sdRef), EV_READ | EV_PERSIST, dns_sd_recv, sdRef);
+    if (event_add(instance->dns_sk_ev, NULL)) {
+        fprintf(stderr, "DNSSD recv event add failed\n");
         exit(1);
     }
 }
@@ -564,6 +620,9 @@ main(int argc, char** argv)
     relay_event_init(instance);
     relay_signal_init(instance);
 
+    DNSServiceRef sdRef;
+    relay_dns_sd_init(instance, &sdRef);
+
     {
         char str[MAX_ADDR_STRLEN];
         fprintf(stderr, "main listen_addr: %s\n",
@@ -587,6 +646,7 @@ main(int argc, char** argv)
         fprintf(stderr, "event_base_dispatch completed\n");
     }
     relay_instance_free(instance);
+    DNSServiceRefDeallocate(sdRef);
     mem_shutdown();
 
     return rc;
