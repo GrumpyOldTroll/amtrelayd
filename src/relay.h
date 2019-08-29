@@ -353,11 +353,14 @@ int relay_parse_command_line(relay_instance* instance,
         int argc, char** argv);
 void relay_raw_socket_init(relay_instance* instance);
 
+/*
+// --jake 2019-08-29: this apparently was sometimes used in debugging...
 #define exit(x) do { \
     fprintf(stderr, "exit(%d): %s:%d\n", x, __FILE__, __LINE__); \
     char* c = 0; \
     sprintf(c, "time to crash please"); \
 } while(0)
+*/
 
 #endif // AMT_RELAY_RELAY_H
 

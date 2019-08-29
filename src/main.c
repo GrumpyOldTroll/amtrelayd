@@ -611,7 +611,13 @@ main(int argc, char** argv)
     instance = relay_instance_alloc(AF_INET);
 
     int rc;
-    rc = relay_parse_command_line(instance, argc, argv);
+
+    if (argc > 1) {
+      rc = relay_parse_command_line(instance, argc, argv);
+    } else {
+      char* help_argv[3] = { argv[0], "--help", 0 };
+      rc = relay_parse_command_line(instance, 2, help_argv);
+    }
     if (rc) {
         fprintf(stderr, "failure parsing command line args\n");
         exit(1);

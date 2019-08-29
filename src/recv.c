@@ -1909,13 +1909,16 @@ relay_accept_url(int fd, short flags, void* uap)
     url = relay_url_get(instance);
     url->url_sock = newfd;
     url->url_instance = instance;
-    url->url_bufev = bufferevent_new(newfd, readcb, writecb, errorcb, url);
+    url->url_bufev = bufferevent_socket_new(instance->event_base, newfd, 0);
+        // BEV_OPT_CLOSE_ON_FREE);
+    // url->url_bufev = bufferevent_new(newfd, readcb, writecb, errorcb, url);
 
     if (url->url_bufev == NULL) {
-        fprintf(
-              stderr, "error url buffer event new: %s\n", strerror(errno));
-        exit(1);
+        fprintf(stderr, "error creating bufferevent, dropping request: %s\n", strerror(errno));
+        return;
     }
+    bufferevent_setcb(url->url_bufev, readcb, writecb, errorcb, url);
+    bufferevent_enable(url->url_bufev, EV_READ);
 
     bufferevent_setwatermark(url->url_bufev, EV_READ, (size_t)0, (size_t)0);
 }
