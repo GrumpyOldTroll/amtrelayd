@@ -30,6 +30,12 @@ AMTRELAYD_CURRENT=2
 AMTRELAYD_REVISION=0
 AMTRELAYD_AGE=2
 
+if ENABLE_DNSSD
+DNSSD_LIB=-ldns_sd
+else
+DNSSD_LIB=
+endif
+
 bin_PROGRAMS = src/amtrelayd
 
 src_amtrelayd_SOURCES = \
@@ -58,7 +64,7 @@ src_amtrelayd_SOURCES = \
 	src/utils.h
 src_amtrelayd_LDADD = \
 	-levent \
-	-ldns_sd
+	$(DNSSD_LIB)
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = src/amtrelayd.pc

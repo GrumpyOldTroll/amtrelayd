@@ -55,7 +55,9 @@ static const char __attribute__((unused)) id[] =
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef ENABLE_DNSSD
 #include <dns_sd.h>
+#endif  // ENABLE_DNSSD
 
 #include "amt.h"
 #include "memory.h"
@@ -299,6 +301,7 @@ relay_event_init(relay_instance* instance)
     }
 }
 
+#ifdef ENABLE_DNSSD
 static void
 dns_sd_recv(int fd, short flags, void* uap)
 {
@@ -352,6 +355,7 @@ relay_dns_sd_init(relay_instance* instance, DNSServiceRef *sdRef)
         exit(1);
     }
 }
+#endif  // ENABLE_DNSSD
 
 static void
 relay_mcast_info(int signum)
@@ -626,8 +630,10 @@ main(int argc, char** argv)
     relay_event_init(instance);
     relay_signal_init(instance);
 
+#ifdef ENABLE_DNSSD
     DNSServiceRef sdRef;
     relay_dns_sd_init(instance, &sdRef);
+#endif  // ENABLE_DNSSD
 
     {
         char str[MAX_ADDR_STRLEN];
@@ -652,7 +658,9 @@ main(int argc, char** argv)
         fprintf(stderr, "event_base_dispatch completed\n");
     }
     relay_instance_free(instance);
+#ifdef ENABLE_DNSSD
     DNSServiceRefDeallocate(sdRef);
+#endif  // ENABLE_DNSSD
     mem_shutdown();
 
     return rc;

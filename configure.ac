@@ -44,6 +44,13 @@ AS_IF([test "x$enable_debug" = "xyes"], [
         AC_DEFINE(ENABLE_DEBUG, [1], [Debug messages.])
 ])
 
+AC_ARG_ENABLE([dnssd],
+        AS_HELP_STRING([--enable-dnssd], [enable DNS-SD support@<:@default=disabled@:>@]),
+        [], [enable_dnssd=no])
+AS_IF([test "x$enable_dnssd" = "xyes"], [
+        AC_DEFINE(ENABLE_DNSSD, [1], [Enable DNS-SD discovery support.])
+])
+
 AC_CHECK_FUNCS([ \
 	__secure_getenv \
 	secure_getenv\
@@ -57,13 +64,16 @@ AC_CHECK_LIB([event],[event_base_new],
 	[AC_DEFINE([HAVE_EVENT_LIB], [1], [Define to 1 if you have libevent])],
 	[AC_MSG_ERROR([could not invoke event_base_new with -levent, you need to install libevent-dev or build from https://github.com/libevent/libevent.git and set C_INCLUDE_PATH and LIBRARY_PATH])])
 
+AS_IF([test "x$enable_dnssd" = "xyes"], [
 AC_CHECK_HEADER([dns_sd.h],
      [AC_DEFINE([HAVE_DNSSD_H], [1], [Define to 1 if you have <dns_sd.h>.])],
-     [AC_MSG_ERROR([could not include <dns_sd.h>. You need to install mdnsd or build from https://github.com/IETF-Hackathon/mDNSResponder.git (mDNSPosix) and set C_INCLUDE_PATH and LIBRARY_PATH])])
+     [AC_MSG_ERROR([could not include <dns_sd.h>. You need to install mdnsd (libavahi-compat-libdnssd-dev) or build from https://github.com/IETF-Hackathon/mDNSResponder.git (mDNSPosix) and set C_INCLUDE_PATH and LIBRARY_PATH])])
 
 AC_CHECK_LIB([dns_sd],[DNSServiceRegister],
 	[AC_DEFINE([HAVE_DNSSD_LIB], [1], [Define to 1 if you have libdns_sd])],
-	[AC_MSG_ERROR([could not load libdns_sd.so. You need to install mdnsd or build from https://github.com/IETF-Hackathon/mDNSResponder.git (mDNSPosix) and set C_INCLUDE_PATH and LIBRARY_PATH])])
+	[AC_MSG_ERROR([could not load libdns_sd.so. You need to install mdnsd (libavahi-compat-libdnssd-dev)or build from https://github.com/IETF-Hackathon/mDNSResponder.git (mDNSPosix) and set C_INCLUDE_PATH and LIBRARY_PATH])])
+])
+AM_CONDITIONAL([ENABLE_DNSSD], [test "x$enable_dnssd" = "xyes"])
 
 my_CFLAGS="\
 -Werror \

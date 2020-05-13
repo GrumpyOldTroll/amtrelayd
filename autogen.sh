@@ -23,5 +23,5 @@ echo "----------------------------------------------------------------"
 echo "Initialized build system. For a common configuration please run:"
 echo "----------------------------------------------------------------"
 echo
-echo "./configure enable_debug=yes CFLAGS='-g -O0' $args"
+echo "./configure enable_debug=yes enable_dnssd=yes CFLAGS='-g -O0' $args"
 echo
