@@ -74,6 +74,12 @@ mem_type_alloc(mem_handle handle)
 
     assert(mb->m_size > 0);
 
+    if (mb->m_cap) {
+      if ((unsigned int)(mb->m_alloced - mb->m_freed) >= mb->m_cap) {
+        return 0;
+      }
+    }
+
     mb->m_alloced++;
     return calloc(1, mb->m_size);
 }
@@ -100,6 +106,17 @@ mem_type_show(mem_print print, void* arg)
     {
         (*print)(arg, mb->m_size, mb->m_alloced, mb->m_freed, mb->m_name);
     }
+}
+
+void
+mem_type_set_cap(mem_handle handle, unsigned int cap)
+{
+    mem_bits_t* mb;
+
+    mb = (mem_bits_t*)handle;
+
+    assert(mb->m_size > 0);
+    mb->m_cap = cap;
 }
 
 void

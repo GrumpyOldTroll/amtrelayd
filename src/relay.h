@@ -141,6 +141,7 @@ typedef struct _relay_instance
     int icmp_sk; /* For receiving ICMP messages */
     struct event *icmp_sk_ev;
     struct idle_sgs idle_sgs_list;
+    unsigned int failed_pkt_alloc;
     unsigned int cap_iface_index;        /* Interface index to capture the
                                             multicast packets */
     int relay_data_socket;     /* recv multicast AF_PACKET on this socket */

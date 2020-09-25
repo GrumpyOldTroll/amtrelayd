@@ -131,8 +131,22 @@ relay_pkt_get(relay_instance* instance, u_int offset)
     if (!mem_packet_handle) {
         mem_packet_handle = mem_type_init(sizeof(packet) + BUFFER_SIZE,
                 "Relay Packet");
+        // TBD: make this configurable?  If running on an underpowered
+        // machine with too much traffic running I'm growing memory
+        // forever, so I'm setting a cap here, but on a fast enough
+        // rate it's possible this will need to be legitimately bigger.
+        // 50k pkts at 12k bits per pkt is 600 megabits, which is 60ms of
+        // buffered data at 10gbps, so I think this is an ok limit that
+        // indicates we've actually fallen behind as long as we're still
+        // not trying to exceed that by too much.  at 100gbps perhaps
+        // should re-evaluate...
+        // --jake 2020-09
+        mem_type_set_cap(mem_packet_handle, 50000);
     }
     pkt = (packet*)mem_type_alloc(mem_packet_handle);
+    if (!pkt) {
+      return pkt;
+    }
     pkt->pkt_instance = instance;
     pkt->pkt_offset = offset;
     pkt->pkt_data = &pkt->pkt_space[offset];
@@ -1411,6 +1425,37 @@ relay_packet_enq(relay_instance* instance, packet* pkt)
     }
 }
 
+static void
+relay_socket_toss_pkt(int fd)
+{
+  // this when dropping a packet for fail to alloc.  otherwise you
+  // spin cpu at 100% because you don't clear your reads.
+  // --jake 2020-09
+    struct iovec iovecs[1];
+    struct msghdr msghdr;
+    uint8_t ctlbuf[CTLLEN];
+    struct sockaddr_storage src_addr;
+    int rc;
+    uint8_t buf[64];
+
+    bzero(&iovecs, sizeof(iovecs));
+    bzero(&msghdr, sizeof(msghdr));
+
+    msghdr.msg_name = &src_addr;
+    msghdr.msg_namelen = sizeof(src_addr);
+    msghdr.msg_iov = &iovecs[0];
+    msghdr.msg_iovlen = sizeof(iovecs)/sizeof(iovecs[0]);
+    msghdr.msg_control = ctlbuf;
+    msghdr.msg_controllen = sizeof(ctlbuf);
+
+    iovecs[0].iov_base = buf;
+    iovecs[0].iov_len = sizeof(buf);
+
+    rc = recvmsg(fd, &msghdr, 0);
+    (void)rc;
+    return;
+}
+
 static int
 relay_socket_read(int fd, struct msghdr* msghdr)
 {
@@ -1460,7 +1505,7 @@ void
 relay_instance_read(int fd, short flags, void* uap)
 {
     (void)flags;
-    int len;
+    int keep_reading = 1;
     relay_instance* instance;
 
     instance = (relay_instance*)uap;
@@ -1469,6 +1514,20 @@ relay_instance_read(int fd, short flags, void* uap)
         // this one is reading a packet from the socket to the
         // gateway.
         packet* pkt = relay_pkt_get(instance, 0);
+        if (!pkt) {
+          // just bail, we're out of packet space.
+          instance->failed_pkt_alloc++;
+          if (relay_debug(instance)) {
+              struct timeval tv;
+              gettimeofday(&tv, NULL);
+              if (tv.tv_sec - instance->last_droppedmsg_t > 5) {
+                  instance->last_droppedmsg_t = tv.tv_sec;
+                  fprintf(stderr, "packet dropped from gw (too many pkts buffered, failed alloc count: %u)\n", instance->failed_pkt_alloc);
+              }
+          }
+          relay_socket_toss_pkt(fd);
+          break;
+        }
 
         struct iovec iovecs[1];
         struct msghdr msghdr;
@@ -1662,9 +1721,9 @@ relay_instance_read(int fd, short flags, void* uap)
             default:
                 fprintf(stderr, "received unknown AMT type, %u\n", *cp);
                 relay_pkt_free(pkt);
-                len = 0;
+                keep_reading = 0;
         }
-    } while (len > 0);
+    } while (keep_reading > 0);
 }
 
 void
@@ -1973,6 +2032,20 @@ nonraw_data_read(int fd, short flags, void* uap)
         // (might we want this bigger for any reason?)
 
         packet* pkt = relay_pkt_get(instance, 80 + 8 + 2);
+        if (!pkt) {
+          // just bail, we're out of packet space.
+          instance->failed_pkt_alloc++;
+          if (relay_debug(instance)) {
+              struct timeval tv;
+              gettimeofday(&tv, NULL);
+              if (tv.tv_sec - instance->last_droppedmsg_t > 5) {
+                  instance->last_droppedmsg_t = tv.tv_sec;
+                  fprintf(stderr, "packet dropped from nonraw sock (too many pkts buffered, failed alloc count: %u)\n", instance->failed_pkt_alloc);
+              }
+          }
+          relay_socket_toss_pkt(fd);
+          break;
+        }
 
         struct iovec iovecs[1];
         struct msghdr msghdr;
@@ -2627,6 +2700,21 @@ raw_socket_read(int fd, short flags, void* uap)
         // (except sometimes we have to poke in a correct checksum)
 
         packet* pkt = relay_pkt_get(instance, 2);
+        if (!pkt) {
+          // just bail, we're out of packet space.
+          instance->failed_pkt_alloc++;
+          if (relay_debug(instance)) {
+              struct timeval tv;
+              gettimeofday(&tv, NULL);
+              if (tv.tv_sec - instance->last_droppedmsg_t > 5) {
+                  instance->last_droppedmsg_t = tv.tv_sec;
+                  fprintf(stderr, "packet dropped from raw sock (too many pkts buffered, failed alloc count: %u)\n", instance->failed_pkt_alloc);
+              }
+          }
+          relay_socket_toss_pkt(fd);
+          break;
+        }
+
 
         struct iovec iovecs[1];
         struct msghdr msghdr;

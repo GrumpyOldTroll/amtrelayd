@@ -51,5 +51,6 @@ void* mem_type_alloc(mem_handle);
 void mem_type_free(mem_handle, void*);
 void mem_type_show(mem_print, void*);
 void mem_shutdown();
+void mem_type_set_cap(mem_handle, unsigned int);
 
 #endif  // AMT_LIBMEM_MEMORY_H

@@ -54,6 +54,7 @@ typedef struct mem_bits
     u_int32_t m_size;             /* size of memory type */
     u_int32_t m_alloced;          /* number of allocs */
     u_int32_t m_freed;            /* number of freed */
+    unsigned int m_cap;           /* max alloc'd and not unalloc'd before null */
     char m_name[MAX_MEM_NAME];    /* memory type description */
 } mem_bits_t;
 
