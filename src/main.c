@@ -512,9 +512,10 @@ relay_url_init(relay_instance* instance)
         case AF_INET:
             salen = sizeof(sin);
             sa = (struct sockaddr*)&sin;
-            bzero(sa, salen);
-            sin.sin_family = instance->relay_af;
-            sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            bcopy((struct sockaddr*)&instance->url_addr, sa, salen);
+            // bzero(sa, salen);
+            // sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            // sin.sin_family = instance->relay_af;
             sin.sin_port = htons(instance->relay_url_port);
             addrp = &sin.sin_addr;
             break;
@@ -522,9 +523,10 @@ relay_url_init(relay_instance* instance)
         case AF_INET6:
             salen = sizeof(sin6);
             sa = (struct sockaddr*)&sin6;
-            bzero(sa, salen);
-            sin6.sin6_addr = in6addr_loopback;
-            sin6.sin6_family = instance->relay_af;
+            bcopy((struct sockaddr*)&instance->url_addr, sa, salen);
+            // bzero(sa, salen);
+            // sin6.sin6_addr = in6addr_loopback;
+            // sin6.sin6_family = instance->relay_af;
             sin6.sin6_port = htons(instance->relay_url_port);
             addrp = &sin6.sin6_addr;
             break;
@@ -540,7 +542,7 @@ relay_url_init(relay_instance* instance)
     sock = socket(instance->relay_af, SOCK_STREAM, IPPROTO_TCP);
     if (sock < 0) {
         fprintf(stderr, "error creating URL socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
+                inet_ntop(family, addrp, str, sizeof(str)), port,
                 strerror(errno));
         exit(1);
     }
@@ -548,7 +550,7 @@ relay_url_init(relay_instance* instance)
     rc = bind(sock, sa, salen);
     if (rc < 0) {
         fprintf(stderr, "error binding url socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
+                inet_ntop(family, addrp, str, sizeof(str)), port,
                 strerror(errno));
         exit(1);
     }
@@ -556,7 +558,7 @@ relay_url_init(relay_instance* instance)
     rc = fcntl(sock, F_SETFL, O_NONBLOCK);
     if (rc < 0) {
         fprintf(stderr, "error O_NONBLOCK on url socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
+                inet_ntop(family, addrp, str, sizeof(str)), port,
                 strerror(errno));
         exit(1);
     }
@@ -564,7 +566,7 @@ relay_url_init(relay_instance* instance)
     rc = listen(sock, 5);
     if (rc < 0) {
         fprintf(stderr, "error url listen on socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
+                inet_ntop(family, addrp, str, sizeof(str)), port,
                 strerror(errno));
         exit(1);
     }
@@ -574,7 +576,7 @@ relay_url_init(relay_instance* instance)
     rc = event_add(instance->relay_url_ev, NULL);
     if (rc < 0) {
         fprintf(stderr, "error url event_add on socket (%s:%u): %s\n",
-                inet_ntop(family, addrp, str, sizeof(str)), htons(port),
+                inet_ntop(family, addrp, str, sizeof(str)), port,
                 strerror(errno));
         exit(1);
     }

@@ -11,6 +11,7 @@ typedef struct ConfigInput_s {
     char tunnel_addr[MAX_ADDR_STRLEN];
     char listen_addr[MAX_ADDR_STRLEN];
     char relay_addr[MAX_ADDR_STRLEN];
+    char url_addr[MAX_ADDR_STRLEN];
     char interface_name[IFNAMSIZ];
     char* last_fname;
     relay_instance* instance;
@@ -57,6 +58,14 @@ handle_listen_addr(ConfigInput* input, const char* value)
 {
     int rc = handle_string(input->listen_addr, sizeof(input->listen_addr),
             value, "DiscoveryAddr (-a/--anycast)");
+    return rc;
+}
+
+static int
+handle_url_addr(ConfigInput* input, const char* value)
+{
+    int rc = handle_string(input->url_addr, sizeof(input->url_addr),
+            value, "UrlAddr (-U/--url-addr)");
     return rc;
 }
 
@@ -321,12 +330,21 @@ handle_config_finish(ConfigInput* input)
             strcpy(input->tunnel_addr, "::");
         }
     }
+    if (!input->url_addr[0]) {
+        if (instance->relay_af == AF_INET) {
+            strcpy(input->url_addr, "127.0.0.1");
+        } else if (instance->relay_af == AF_INET6) {
+            strcpy(input->url_addr, "::1");
+        }
+    }
     int rc = parse_ip(pstr, &instance->listen_addr, instance->relay_af,
             "DiscoveryAddr (-a/--anycast)");
     rc |= parse_ip(input->tunnel_addr, &instance->tunnel_addr,
             instance->tunnel_af, "TunnelAddr (-s,--tunnel-addr)");
     rc |= parse_ip(input->relay_addr, &instance->relay_addr,
             instance->relay_af, "RelayAddr (-r/--relay-addr)");
+    rc |= parse_ip(input->url_addr, &instance->url_addr,
+            instance->relay_af, "UrlAddr (-U/--url-addr)");
 
     if (instance->cap_iface_index == 0) {
         fprintf(stderr, "DataInterface (-c/--interface) wasn't set to a valid interface name\n");
@@ -385,6 +403,7 @@ config_param(ConfigInput* input,
         { "RelayFamily", handle_relay_family },
         { "RelayUrlPort", handle_url_port },
         { "SuppressICMP", handle_icmp_suppress },
+        { "UrlAddr", handle_url_addr },
         { "TunnelAddr", handle_tunnel_addr },
         { "TunnelFamily", handle_tunnel_family },
     };
@@ -473,6 +492,8 @@ usage(char* name)
             // suppressing NatMode in help, I don't think this works and
             // I'm not using it inside nat. --jake 2019-08-29
             // "   NatMode=<0/1>          not sure what this does...\n"
+            "   UrlAddr=<ip>           IP address to listen for stats queries.  Must\n"
+            "                          currently be the same address family as RelayAddr\n"
             "   RelayAddr=<ip>         Public IP address of relay (probably same as\n"
             "                          DiscoveryAddr unless inside a NAT)\n"
             "   ExternalData=<0/1>     Set to 1 if data has already had UDP checksum\n"
@@ -492,6 +513,7 @@ usage(char* name)
             "   -a/--discovery-addr <ip>: DiscoveryAddr\n"
             "   -r/--relay-addr <ip>: RelayAddr\n"
             "   -s/--tunnel-addr <ip>: TunnelAddr\n"
+            "   -U/--url-addr <ip>: UrlAddr\n"
             "   -c/--interface <ifname>: DataInterface\n"
             "   -d/--debug: (like DebugLevel=1)\n"
             "   -i/--icmp-suppress: (like SuppressICMP=1)\n"
@@ -533,15 +555,20 @@ relay_parse_command_line(relay_instance* instance, int argc, char** argv)
         { "non-raw", required_argument, 0, 'w' },
         { "external", required_argument, 0, 'e' },
         { "relay-addr", required_argument, 0, 'r' },
+        { "url-addr", required_argument, 0, 'U' },
         { "tunnel-addr", required_argument, 0, 's' }
     };
 
     // TBD: config file instead of command line args.
-    while ((ch = getopt_long(argc, argv, "u:a:dp:q:t:g:b:mn:c:l:r:s:eiw:f:h",
+    while ((ch = getopt_long(argc, argv, "u:U:a:dp:q:t:g:b:mn:c:l:r:s:eiw:f:h",
                   long_options, NULL)) != EOF) {
         switch (ch) {
             case 's': {
                 rc = handle_tunnel_addr(&input, optarg);
+                break;
+            }
+            case 'U': {
+                rc = handle_url_addr(&input, optarg);
                 break;
             }
             case 'r': {

@@ -156,6 +156,7 @@ typedef struct _relay_instance
     struct sockaddr_storage tunnel_addr; /* IP address used as the source addr for membership queries */
     struct sockaddr_storage listen_addr; /* IP address to listen for packets from gateways */
     struct sockaddr_storage relay_addr; /* IP address to use for relay */
+    struct sockaddr_storage url_addr; /* IP address to use for url connections. */
     struct event_base *event_base;
 } relay_instance;
 
