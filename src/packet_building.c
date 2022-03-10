@@ -105,7 +105,7 @@ build_membership_query(int family, struct sockaddr* source,
     switch(family) {
         case AF_INET:
         {
-            if (len < sizeof(struct ip) + sizeof(struct igmpv3)) {
+            if (len < sizeof(struct ip) + 4 + sizeof(struct igmpv3)) {
                 char buf[MAX_SOCK_STRLEN];
                 fprintf(stderr, "amtgw internal error: could not build "
                         "IGMP query in %u bytes from %s\n",
@@ -114,14 +114,15 @@ build_membership_query(int family, struct sockaddr* source,
             }
             struct ip* iph;
             struct igmpv3* igmpq;
+            uint8_t* opt_space;
             struct sockaddr_in* src_addr;
             iph = (struct ip*)cp;
             /* Fill IP header */
-            iph->ip_hl = 5;
+            iph->ip_hl = 6;
             iph->ip_v = 4;
             iph->ip_tos = 0;
             iph->ip_len =
-                  htons(sizeof(struct ip) + sizeof(struct igmpv3));
+                  htons(sizeof(struct ip) + 4 + sizeof(struct igmpv3));
             iph->ip_id = htons(random());
             iph->ip_off = 0;
             iph->ip_ttl = 1;
@@ -133,9 +134,18 @@ build_membership_query(int family, struct sockaddr* source,
             // iph->ip_dst.s_addr = htonl(0xe0000001);
             inet_pton(AF_INET, "224.0.0.1", &iph->ip_dst);
 
+            // add router alert option, as vlc 4.0 rejects it otherwise,
+            // plus RFC 3376 section 4 says that all the IGMP messages are
+            // sent with the router alert option.
+            opt_space = (cp + sizeof(struct ip));
+            opt_space[0] = 0x94;
+            opt_space[1] = 0x04;
+            opt_space[2] = 0x00;
+            opt_space[3] = 0x00;
+
             /* IGMPv3 membership query */
             // https://tools.ietf.org/html/rfc3376#section-4.1
-            igmpq = (struct igmpv3*)(cp + sizeof(struct ip));
+            igmpq = (struct igmpv3*)(cp + sizeof(struct ip) + 4);
             igmpq->igmp_type = IGMP_HOST_MEMBERSHIP_QUERY;
             // igmpq->igmp_code = 100;
             igmpq->igmp_code = 16;  // 1.6s response time, instead of 10s (match cisco)
@@ -152,8 +162,8 @@ build_membership_query(int family, struct sockaddr* source,
             // igmpq->srcs[0] = 0;
             igmpq->igmp_cksum = csum((uint8_t*)igmpq,
                                sizeof(struct igmpv3));
-            iph->ip_sum = csum((uint8_t*)iph, sizeof(struct ip));
-            len = sizeof(struct ip) + sizeof(struct igmpv3);
+            iph->ip_sum = csum((uint8_t*)iph, sizeof(struct ip) + 4);
+            len = sizeof(struct ip) + 4 + sizeof(struct igmpv3);
             return len;
         }
         break;

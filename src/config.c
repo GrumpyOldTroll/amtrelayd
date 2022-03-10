@@ -556,7 +556,8 @@ relay_parse_command_line(relay_instance* instance, int argc, char** argv)
         { "external", required_argument, 0, 'e' },
         { "relay-addr", required_argument, 0, 'r' },
         { "url-addr", required_argument, 0, 'U' },
-        { "tunnel-addr", required_argument, 0, 's' }
+        { "tunnel-addr", required_argument, 0, 's' },
+        { 0, 0, 0, 0 }
     };
 
     // TBD: config file instead of command line args.
