@@ -14,3 +14,38 @@ them further separately. Also to try to clean up the
 build process a bit, with thanks to libabc.
 (<https://git.kernel.org/pub/scm/linux/kernel/git/kay/libabc.git)
 
+
+## Dependencies
+
+### Debian/Ubuntu:
+
+~~~
+# runtime
+apt-get install -y libevent-dev libavahi-compat-libdnssd-dev
+# build
+apt-get install -y
+  autoconf \
+  libtool-bin \
+  make \
+  cmake \
+  build-essential
+~~~
+
+### Redhat/Fedora:
+
+~~~
+# runtime
+yum install libevent-devel avahi-compat-libdns_sd avahi-compat-libdns_sd-devel
+# build
+yum install make automake gcc gcc-c++ git libtool
+~~~
+
+## Building
+
+~~~
+./autogen.sh
+./configure
+make
+make install
+~~~
+
